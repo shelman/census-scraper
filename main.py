@@ -1,7 +1,7 @@
 import time
 
 from selenium import webdriver
-from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -42,11 +42,13 @@ def _select_5_year_summary(driver, topic_id):
 
 PLACES = [
     'Boston',
+    'Chelsea',
 ]
 
 TOPIC_IDS = [
     'S0101',
-    'S0802',
+    'S1002',
+    'S1602',
 ]
 
 
@@ -96,6 +98,7 @@ class CensusScraper():
         for option in options:
             if selection in option.get_attribute('value'):
                 option.click()
+                time.sleep(1)
                 return
 
     def _open_geographies_panel(self):
@@ -116,6 +119,23 @@ class CensusScraper():
 
         self._make_select_selection('yearFilter', '2017')
         self._wait_for_loading_mask()
+
+        while len(unchecked_checkbox_ids) > 0:
+            for id in unchecked_checkbox_ids.copy():
+                try:
+                    self.driver.find_element_by_id(id).click()
+                    unchecked_checkbox_ids.remove(id)
+                    checked_checkbox_ids.add(id)
+                except NoSuchElementException:
+                    pass
+            next_page_button = self.driver.find_element_by_class_name('yui-pg-next')
+            if next_page_button.is_enabled():
+                next_page_button.click()
+            else:
+                print('Could not find entries for {}'.format(', '.join(unchecked_checkbox_ids)))
+                break
+            self._wait_for_loading_mask()
+
         pass
 
     def _wait_for_loading_mask(self):
