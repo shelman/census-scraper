@@ -1,6 +1,7 @@
 import time
 
 from selenium import webdriver
+from selenium.common.exceptions import NoSuchElementException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -64,8 +65,15 @@ def _toggle_geographies_panel(driver):
     time.sleep(2)
 
 
+PLACES = [
+    'Chelsea'
+]
+
+
 class ElementIds:
+    GEOGRAPHIES_PANEL_CONTENT = 'geotabs'
     GEOGRAPHIES_TOGGLE_BUTTON = 'geo-overlay-btn'
+    INITIAL_LOAD_MASK = 'topics_wait_mask'
 
 
 class CensusScraper():
@@ -79,10 +87,23 @@ class CensusScraper():
         self.driver.get('https://factfinder.census.gov/faces/nav/jsf/pages/searchresults.xhtml')
         self._wait_initial_load()
 
+        self._select_places(PLACES)
+
+    def _open_geographies_panel(self):
+        self.driver.find_element_by_id(ElementIds.GEOGRAPHIES_TOGGLE_BUTTON).click()
+        WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.ID, ElementIds.GEOGRAPHIES_PANEL_CONTENT)))
+
+    def _select_places(self, places):
+        self._open_geographies_panel()
         pass
 
     def _wait_initial_load(self):
-        WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.ID, ElementIds.GEOGRAPHIES_TOGGLE_BUTTON)))
+        try:
+            WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.ID, ElementIds.INITIAL_LOAD_MASK)))
+        except:
+            pass
+        WebDriverWait(self.driver, 10).until_not(EC.presence_of_element_located((By.ID, ElementIds.INITIAL_LOAD_MASK)))
+
 
 def main():
     scraper = CensusScraper()
