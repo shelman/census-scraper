@@ -8,7 +8,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 def _add_to_your_selections(driver):
     driver.find_element_by_partial_link_text('ADD TO YOUR SELECTIONS').click()
-    time.sleep(2)
+    time.sleep(3)
 
 
 def _download_zip(driver):
@@ -64,15 +64,35 @@ def _toggle_geographies_panel(driver):
     time.sleep(2)
 
 
-def _wait_initial_load():
-    time.sleep(3)
+class ElementIds:
+    GEOGRAPHIES_TOGGLE_BUTTON = 'geo-overlay-btn'
 
+
+class CensusScraper():
+    def __init__(self):
+        self.driver = webdriver.Chrome()
+
+    def cleanup(self):
+        self.driver.quit()
+
+    def get_census_data(self):
+        self.driver.get('https://factfinder.census.gov/faces/nav/jsf/pages/searchresults.xhtml')
+        self._wait_initial_load()
+
+        pass
+
+    def _wait_initial_load(self):
+        WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.ID, ElementIds.GEOGRAPHIES_TOGGLE_BUTTON)))
 
 def main():
+    scraper = CensusScraper()
+    try:
+        scraper.get_census_data()
+    finally:
+        scraper.cleanup()
+
     driver = webdriver.Chrome()
     driver.get('https://factfinder.census.gov/faces/nav/jsf/pages/searchresults.xhtml')
-
-    _wait_initial_load()
 
     _toggle_geographies_panel(driver)
 
@@ -81,7 +101,7 @@ def main():
 
     _make_select_selection(driver, 'state', 'Massachusetts')
 
-    time.sleep(1)
+    time.sleep(2)
     _make_select_selection(driver, 'geoAssistList', 'Chelsea', needs_initial_click=False)
     _add_to_your_selections(driver)
 
