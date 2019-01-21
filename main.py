@@ -53,9 +53,9 @@ TOPIC_IDS = [
 class ElementIds:
     GEOGRAPHIES_PANEL_CONTENT = 'geotabs'
     GEOGRAPHIES_TOGGLE_BUTTON = 'geo-overlay-btn'
-    INITIAL_LOAD_MASK = 'topics_wait_mask'
     PLACES_SELECT = 'geoAssistList'
     SELECTION_ADDING_LOAD_MASK = 'geoAssist_wait_mask'
+    TOPIC_LOADING_MASK = 'topics_wait_mask'
 
 
 class CensusScraper():
@@ -67,7 +67,7 @@ class CensusScraper():
 
     def get_census_data(self):
         self.driver.get('https://factfinder.census.gov/faces/nav/jsf/pages/searchresults.xhtml')
-        self._wait_initial_load()
+        self._wait_for_loading_mask()
 
         self._select_places(PLACES)
         self._select_topics(TOPIC_IDS)
@@ -94,7 +94,7 @@ class CensusScraper():
 
         options = select_element.find_elements_by_css_selector('option')
         for option in options:
-            if selection in option.text:
+            if selection in option.get_attribute('value'):
                 option.click()
                 return
 
@@ -104,28 +104,26 @@ class CensusScraper():
 
     def _select_places(self, places):
         self._open_geographies_panel()
-        self._make_select_selection('summaryLevel', 'Place - 160')
+        self._make_select_selection('summaryLevel', '160')
         self._make_select_selection('state', 'Massachusetts')
         for place in places:
             self._add_place_to_selections(place)
         self._close_geographies_panel()
 
     def _select_topics(self, topic_ids):
-        for topic_id in topic_ids:
-            topic_input = self.driver.find_element_by_id('searchTopicInput')
-            topic_input.send_keys(topic_id)
-            self.driver.find_element_by_id('refinesearchsubmit').click()
-            WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.ID, 'ACS_17_5YR_{}'.format(topic_id)))).click()
-            removal_selector = '.remove-it[title="remove {}"]'.format(topic_id)
-            WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, removal_selector))).click()
-            WebDriverWait(self.driver, 5).until_not(EC.presence_of_element_located((By.CSS_SELECTOR, removal_selector)))
+        unchecked_checkbox_ids = {'ACS_17_5YR_{}'.format(topic_id) for topic_id in topic_ids}
+        checked_checkbox_ids = set()
 
-    def _wait_initial_load(self):
+        self._make_select_selection('yearFilter', '2017')
+        self._wait_for_loading_mask()
+        pass
+
+    def _wait_for_loading_mask(self):
         try:
-            WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.ID, ElementIds.INITIAL_LOAD_MASK)))
+            WebDriverWait(self.driver, 3).until(EC.presence_of_element_located((By.ID, ElementIds.TOPIC_LOADING_MASK)))
         except TimeoutException:
             pass
-        WebDriverWait(self.driver, 10).until_not(EC.presence_of_element_located((By.ID, ElementIds.INITIAL_LOAD_MASK)))
+        WebDriverWait(self.driver, 10).until_not(EC.presence_of_element_located((By.ID, ElementIds.TOPIC_LOADING_MASK)))
 
 
 def main():
