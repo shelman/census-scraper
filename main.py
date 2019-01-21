@@ -89,13 +89,31 @@ class CensusScraper():
 
         self._select_places(PLACES)
 
+    def _add_place_to_selections(self, place):
+        _make_select_selection(self.driver, 'geoAssistList', place, needs_initial_click=False)
+        pass
+
+    def _make_select_selection(self, select_element_id, selection, needs_initial_click=True):
+        select_element = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.ID, select_element_id)))
+        if needs_initial_click:
+            select_element.click()
+
+        options = select_element.find_elements_by_css_selector('option')
+        for option in options:
+            if selection in option.text:
+                option.click()
+                return
+
     def _open_geographies_panel(self):
         self.driver.find_element_by_id(ElementIds.GEOGRAPHIES_TOGGLE_BUTTON).click()
         WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.ID, ElementIds.GEOGRAPHIES_PANEL_CONTENT)))
 
     def _select_places(self, places):
         self._open_geographies_panel()
-        pass
+        self._make_select_selection('summaryLevel', 'Place - 160')
+        self._make_select_selection('state', 'Massachusetts')
+        for place in places:
+            self._add_place_to_selections(place)
 
     def _wait_initial_load(self):
         try:
