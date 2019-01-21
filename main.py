@@ -42,7 +42,11 @@ def _select_5_year_summary(driver, topic_id):
 
 PLACES = [
     'Boston',
-    'Chelsea',
+]
+
+TOPIC_IDS = [
+    'S0101',
+    'S0802',
 ]
 
 
@@ -66,6 +70,7 @@ class CensusScraper():
         self._wait_initial_load()
 
         self._select_places(PLACES)
+        self._select_topics(TOPIC_IDS)
         pass
 
     def _add_place_to_selections(self, place):
@@ -78,6 +83,10 @@ class CensusScraper():
             pass
         WebDriverWait(self.driver, 3).until_not(EC.presence_of_element_located((By.ID, ElementIds.SELECTION_ADDING_LOAD_MASK)))
 
+    def _close_geographies_panel(self):
+        self.driver.execute_script('requestGeoOverlayToggle();')
+        WebDriverWait(self.driver, 10).until_not(EC.visibility_of_element_located((By.ID, ElementIds.GEOGRAPHIES_PANEL_CONTENT)))
+
     def _make_select_selection(self, select_element_id, selection, needs_initial_click=True):
         select_element = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.ID, select_element_id)))
         if needs_initial_click:
@@ -89,13 +98,9 @@ class CensusScraper():
                 option.click()
                 return
 
-    def _close_geographies_panel(self):
-        self.driver.execute_script('requestGeoOverlayToggle();')
-        WebDriverWait(self.driver, 10).until_not(EC.presence_of_element_located((By.ID, ElementIds.GEOGRAPHIES_PANEL_CONTENT)))
-
     def _open_geographies_panel(self):
         self.driver.find_element_by_id(ElementIds.GEOGRAPHIES_TOGGLE_BUTTON).click()
-        WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.ID, ElementIds.GEOGRAPHIES_PANEL_CONTENT)))
+        WebDriverWait(self.driver, 10).until(EC.visibility_of_element_located((By.ID, ElementIds.GEOGRAPHIES_PANEL_CONTENT)))
 
     def _select_places(self, places):
         self._open_geographies_panel()
@@ -104,6 +109,16 @@ class CensusScraper():
         for place in places:
             self._add_place_to_selections(place)
         self._close_geographies_panel()
+
+    def _select_topics(self, topic_ids):
+        for topic_id in topic_ids:
+            topic_input = self.driver.find_element_by_id('searchTopicInput')
+            topic_input.send_keys(topic_id)
+            self.driver.find_element_by_id('refinesearchsubmit').click()
+            WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.ID, 'ACS_17_5YR_{}'.format(topic_id)))).click()
+            removal_selector = '.remove-it[title="remove {}"]'.format(topic_id)
+            WebDriverWait(self.driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, removal_selector))).click()
+            WebDriverWait(self.driver, 5).until_not(EC.presence_of_element_located((By.CSS_SELECTOR, removal_selector)))
 
     def _wait_initial_load(self):
         try:
