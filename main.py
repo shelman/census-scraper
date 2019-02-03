@@ -9,33 +9,63 @@ from selenium.webdriver.support import expected_conditions as EC
 
 PLACES = [
     'Essex',
-    'Ipswich',
-    'Topsfield',
+    # 'Ipswich',
+    # 'Topsfield',
 ]
 
-TOPIC_IDS = [
-    'B01001',  # Sex by Age
-    'B01003',  # Total Population
-    'B02001',  # Race
-    'B03002',  # Hispanic or Latino
-    'B09002',  # Own Children Under 18 Years By Family Type And Age
-    'B11003',  # Family Type By Presence And Age Of Own Children Under 18 Years
-    'B11016',  # Household Type By Household Size
-    'B14001',  # School Enrollment By Level Of School For The Population 3 Years And Over
-    'B15002',  # Educational Attainment For The Population 25 Years And Over
-    'B19001',  # Household Income in the Past 12 Months
-    'B19013',  # Median Household Income In The Past 12 Months
-    'B19202',  # Median Nonfamily Household Income In The Past 12 Months
-    'B25001',  # Housing Units
-    'B25003',  # Tenure
-    'B25007',  # Tenure By Age Of Householder
-    'B25010',  # Average Household Size Of Occupied Housing Units By Tenure
-    'B25024',  # Units In Structure
-    'B25034',  # Year Structure Built
-    'B25064',  # Median Gross Rent (Dollars)
-    'B25077',  # Median Value (Dollars)
-    'B26001',  # Group Quarters Population
-]
+
+class DataSet:
+    def __init__(self, name, topic_ids, year_filter, checkbox_id_prefix, program_filter=None):
+        self.name = name
+        self.topic_ids = topic_ids
+        self.year_filter = year_filter
+        self.checkbox_id_prefix = checkbox_id_prefix
+        self.program_filter = program_filter
+
+
+five_year_census = DataSet(
+    'Five Year Census',
+    [
+        'B01001',  # Sex by Age
+        'B01003',  # Total Population
+        'B02001',  # Race
+        'B03002',  # Hispanic or Latino
+        'B09002',  # Own Children Under 18 Years By Family Type And Age
+        'B11003',  # Family Type By Presence And Age Of Own Children Under 18 Years
+        'B11016',  # Household Type By Household Size
+        'B14001',  # School Enrollment By Level Of School For The Population 3 Years And Over
+        'B15002',  # Educational Attainment For The Population 25 Years And Over
+        'B19001',  # Household Income in the Past 12 Months
+        'B19013',  # Median Household Income In The Past 12 Months
+        'B19202',  # Median Nonfamily Household Income In The Past 12 Months
+        'B25001',  # Housing Units
+        'B25003',  # Tenure
+        'B25007',  # Tenure By Age Of Householder
+        'B25010',  # Average Household Size Of Occupied Housing Units By Tenure
+        'B25024',  # Units In Structure
+        'B25034',  # Year Structure Built
+        'B25064',  # Median Gross Rent (Dollars)
+        'B25077',  # Median Value (Dollars)
+        'B26001',  # Group Quarters Population
+    ],
+    '2017',
+    'ACS_17_5YR',
+)
+
+decennial_census = DataSet(
+    'Decennial Census',
+    [
+        'P1',      # Total Population
+        'P3',      # Race
+        'P4',      # Hispanic or Latino
+        'QTP11',  # Total Households
+        'H1',      # Housing Units
+        'P12',     # Sex by Age
+    ],
+    '2010',
+    'DEC_10_SF1',
+    program_filter='Decennial Census',
+)
 
 
 class ElementIds:
@@ -58,7 +88,10 @@ class CensusScraper():
         self._wait_for_loading_mask()
 
         self._select_places(PLACES)
-        self._select_topics(TOPIC_IDS)
+
+        self._select_topics(five_year_census)
+        self._select_topics(decennial_census)
+
         self._download_zip_file()
 
     def _add_place_to_selections(self, place):
@@ -70,6 +103,10 @@ class CensusScraper():
         except TimeoutException:
             pass
         WebDriverWait(self.driver, 3).until_not(EC.presence_of_element_located((By.ID, ElementIds.SELECTION_ADDING_LOAD_MASK)))
+
+    def _clear_result_filters(self):
+        self._make_select_selection('yearFilter', 'NONE')
+        self._make_select_selection('programFilter', 'NONE')
 
     def _close_geographies_panel(self):
         self.driver.execute_script('requestGeoOverlayToggle();')
@@ -120,13 +157,16 @@ class CensusScraper():
             self._add_place_to_selections(place)
         self._close_geographies_panel()
 
-    def _select_topics(self, topic_ids):
+    def _select_topics(self, dataset):
+        self._clear_result_filters()
 
-        unchecked_checkbox_ids = {'ACS_17_5YR_{}'.format(topic_id) for topic_id in topic_ids}
-        checked_checkbox_ids = set()
+        unchecked_checkbox_ids = {'{}_{}'.format(dataset.checkbox_id_prefix, topic_id) for topic_id in dataset.topic_ids}
 
-        self._make_select_selection('yearFilter', '2017')
+        self._make_select_selection('yearFilter', dataset.year_filter)
         self._wait_for_loading_mask()
+
+        if dataset.program_filter is not None:
+            self._make_select_selection('programFilter', dataset.program_filter)
 
         self._make_select_selection('', '75', cls='yui-pg-rpp-options')
         self._wait_for_loading_mask()
@@ -138,11 +178,12 @@ class CensusScraper():
                     self.driver.execute_script('arguments[0].scrollIntoView({ behavior: "auto", block: "center", inline: "center"});', checkbox)
                     checkbox.click()
                     unchecked_checkbox_ids.remove(id)
-                    checked_checkbox_ids.add(id)
                 except NoSuchElementException:
                     pass
 
             next_page_button = self.driver.find_element_by_id('paginator_below').find_element_by_class_name('yui-pg-next')
+            # TODO: this is not always reliable - sometimes the element stays enabled once paging is exhausted,
+            # which means this can hang
             if next_page_button.is_enabled():
                 next_page_button.click()
             else:
