@@ -7,48 +7,34 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 
-def _download_zip(driver):
-    driver.find_element_by_id('dnld_btn_below').click()
-    time.sleep(1)
-    for btn in driver.find_element_by_id('message-dialog').find_elements_by_css_selector('button'):
-        if btn.text == 'OK':
-            btn.click()
-
-    time.sleep(10)
-    for btn in driver.find_element_by_id('downloadprogress').find_elements_by_css_selector('button'):
-        if btn.text == 'DOWNLOAD':
-            btn.click()
-
-    time.sleep(5)
-
-
-def _search_for_topic(driver, topic_id):
-    topic_input = driver.find_element_by_id('searchTopicInput')
-    topic_input.send_keys(topic_id)
-    driver.find_element_by_id('refinesearchsubmit').click()
-    time.sleep(2)
-
-
-def _select_5_year_summary(driver, topic_id):
-    driver.find_element_by_id('ACS_17_5YR_{}'.format(topic_id)).click()
-    time.sleep(1)
-    # rows = driver.find_elements_by_css_selector('#resulttable > table > tbody > tr')
-    # for row in rows:
-    #     cells = row.find_elements_by_css_selector('td')
-    #     if '2017 ACS 5-year estimates' in cells[3].text:
-    #         cells[0].find_element_by_css_selector('input').click()
-
-
-
 PLACES = [
-    'Boston',
-    'Chelsea',
+    'Essex',
+    'Ipswich',
+    'Topsfield',
 ]
 
 TOPIC_IDS = [
-    'S0101',
-    'S1002',
-    'S1602',
+    'B01001',  # Sex by Age
+    'B01003',  # Total Population
+    'B02001',  # Race
+    'B03002',  # Hispanic or Latino
+    'B09002',  # Own Children Under 18 Years By Family Type And Age
+    'B11003',  # Family Type By Presence And Age Of Own Children Under 18 Years
+    'B11016',  # Household Type By Household Size
+    'B14001',  # School Enrollment By Level Of School For The Population 3 Years And Over
+    'B15002',  # Educational Attainment For The Population 25 Years And Over
+    'B19001',  # Household Income in the Past 12 Months
+    'B19013',  # Median Household Income In The Past 12 Months
+    'B19202',  # Median Nonfamily Household Income In The Past 12 Months
+    'B25001',  # Housing Units
+    'B25003',  # Tenure
+    'B25007',  # Tenure By Age Of Householder
+    'B25010',  # Average Household Size Of Occupied Housing Units By Tenure
+    'B25024',  # Units In Structure
+    'B25034',  # Year Structure Built
+    'B25064',  # Median Gross Rent (Dollars)
+    'B25077',  # Median Value (Dollars)
+    'B26001',  # Group Quarters Population
 ]
 
 
@@ -73,7 +59,7 @@ class CensusScraper():
 
         self._select_places(PLACES)
         self._select_topics(TOPIC_IDS)
-        pass
+        self._download_zip_file()
 
     def _add_place_to_selections(self, place):
         self._make_select_selection(ElementIds.PLACES_SELECT, place, needs_initial_click=False)
@@ -89,8 +75,29 @@ class CensusScraper():
         self.driver.execute_script('requestGeoOverlayToggle();')
         WebDriverWait(self.driver, 10).until_not(EC.visibility_of_element_located((By.ID, ElementIds.GEOGRAPHIES_PANEL_CONTENT)))
 
-    def _make_select_selection(self, select_element_id, selection, needs_initial_click=True):
-        select_element = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.ID, select_element_id)))
+    def _download_zip_file(self):
+        self.driver.find_element_by_id('dnld_btn_below').click()
+        WebDriverWait(self.driver, 5).until(EC.visibility_of_element_located((By.CSS_SELECTOR, '#message-dialog button')))
+        for btn in self.driver.find_element_by_id('message-dialog').find_elements_by_css_selector('button'):
+            if btn.text == 'OK':
+                btn.click()
+
+        start = time.time()
+        while True:
+            if time.time() - start > 60:
+                print('Waited 60 seconds to download - cancelling')
+                return
+            for btn in self.driver.find_element_by_id('downloadprogress').find_elements_by_css_selector('button'):
+                if btn.text == 'DOWNLOAD' and btn.is_enabled():
+                    btn.click()
+                    time.sleep(5)
+                    return 
+
+    def _make_select_selection(self, select_element_id, selection, needs_initial_click=True, cls=None):
+        if cls is not None:
+            select_element = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.CLASS_NAME, cls)))
+        else:
+            select_element = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.ID, select_element_id)))
         if needs_initial_click:
             select_element.click()
 
@@ -114,29 +121,34 @@ class CensusScraper():
         self._close_geographies_panel()
 
     def _select_topics(self, topic_ids):
+
         unchecked_checkbox_ids = {'ACS_17_5YR_{}'.format(topic_id) for topic_id in topic_ids}
         checked_checkbox_ids = set()
 
         self._make_select_selection('yearFilter', '2017')
         self._wait_for_loading_mask()
 
+        self._make_select_selection('', '75', cls='yui-pg-rpp-options')
+        self._wait_for_loading_mask()
+
         while len(unchecked_checkbox_ids) > 0:
             for id in unchecked_checkbox_ids.copy():
                 try:
-                    self.driver.find_element_by_id(id).click()
+                    checkbox = self.driver.find_element_by_id(id)
+                    self.driver.execute_script('arguments[0].scrollIntoView({ behavior: "auto", block: "center", inline: "center"});', checkbox)
+                    checkbox.click()
                     unchecked_checkbox_ids.remove(id)
                     checked_checkbox_ids.add(id)
                 except NoSuchElementException:
                     pass
-            next_page_button = self.driver.find_element_by_class_name('yui-pg-next')
+
+            next_page_button = self.driver.find_element_by_id('paginator_below').find_element_by_class_name('yui-pg-next')
             if next_page_button.is_enabled():
                 next_page_button.click()
             else:
                 print('Could not find entries for {}'.format(', '.join(unchecked_checkbox_ids)))
                 break
             self._wait_for_loading_mask()
-
-        pass
 
     def _wait_for_loading_mask(self):
         try:
@@ -150,15 +162,11 @@ def main():
     scraper = CensusScraper()
     try:
         scraper.get_census_data()
+        print('Downloaded successfully')
+    except Exception as e:
+        raise e
     finally:
         scraper.cleanup()
-
-    _search_for_topic(driver, 'S0101')
-    _select_5_year_summary(driver, 'S0101')
-
-    _download_zip(driver)
-
-    print('Downloaded successfully')
 
 
 if __name__ == '__main__':
